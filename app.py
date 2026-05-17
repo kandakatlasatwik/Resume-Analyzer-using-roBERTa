@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
+import os
 import torch
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, logging as transformers_logging
 import PyPDF2
 import docx
 import io
@@ -9,15 +10,24 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 
+HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+
 tokenizer = None
 model = None
 
 def load_model():
     global tokenizer, model
     if tokenizer is None:
-        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-roberta-large-v1")
-        model = AutoModel.from_pretrained("sentence-transformers/all-roberta-large-v1")
+        download_kwargs = {}
+        if HF_TOKEN:
+            download_kwargs["use_auth_token"] = HF_TOKEN
+        else:
+            transformers_logging.set_verbosity_error()
+        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-roberta-large-v1", **download_kwargs)
+        model = AutoModel.from_pretrained("sentence-transformers/all-roberta-large-v1", **download_kwargs)
         model.eval()
+        if not HF_TOKEN:
+            transformers_logging.set_verbosity_warning()
 
 def mean_pooling(model_output, attention_mask):
     token_embeddings = model_output[0]
